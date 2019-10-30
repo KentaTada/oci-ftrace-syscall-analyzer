@@ -1,13 +1,36 @@
 #[macro_use]
 mod err_converter;
+mod oci_seccomp;
 
 use self::err_converter::Error;
+use self::oci_seccomp::{Seccomp, SeccompAction};
 use super::utils;
 use clap::ArgMatches;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
+
+fn extract_syscall_name(line: &str) -> Option<String> {
+    if let Some(begin) = line.rfind("sys_") {
+        if let Some(end) = line.rfind("(") {
+            return Some(line[begin..end].trim_start_matches("sys_").to_string());
+        }
+    }
+    return None;
+}
+
+fn generate_profile(trace_file: &str) -> Seccomp {
+    let mut syscalls: Vec<String> = Vec::new();
+    for line in BufReader::new(File::open(&trace_file).unwrap()).lines() {
+        if let Some(syscall) = extract_syscall_name(&line.unwrap()) {
+            syscalls.push(syscall);
+        };
+    }
+    syscalls.sort();
+    syscalls.dedup();
+    Seccomp::new(SeccompAction::ActErrno, SeccompAction::ActAllow, syscalls)
+}
 
 fn convert_error_info(line: &str, error_info: &HashMap<&str, err_converter::Error>) -> String {
     if let Some(pos) = line.rfind("0x") {
@@ -42,12 +65,19 @@ pub fn report(report_args: &ArgMatches) {
 
     let output_file_path = report_args.value_of("output").unwrap().to_string();
     let mut output_file = BufWriter::new(File::create(output_file_path).unwrap());
-    let error_info = error_info!();
-    for line in BufReader::new(File::open(&container_trace_file).unwrap()).lines() {
-        let out = line.unwrap();
+    if report_args.is_present("seccomp-profile") {
+        let profile = generate_profile(&container_trace_file);
         output_file
-            .write_all(convert_error_info(&out, &error_info).as_bytes())
+            .write_all(serde_json::to_string_pretty(&profile).unwrap().as_bytes())
             .unwrap();
+    } else {
+        let error_info = error_info!();
+        for line in BufReader::new(File::open(&container_trace_file).unwrap()).lines() {
+            let out = line.unwrap();
+            output_file
+                .write_all(convert_error_info(&out, &error_info).as_bytes())
+                .unwrap();
+        }
     }
     output_file
         .flush()

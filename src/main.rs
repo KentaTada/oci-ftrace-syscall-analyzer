@@ -32,6 +32,11 @@ fn main() {
             SubCommand::with_name("report")
                 .about("Dump analyzer result")
                 .arg(
+                    Arg::with_name("seccomp-profile")
+                        .long("seccomp-profile")
+                        .help("Generate seccomp profile by the result of trace"),
+                )
+                .arg(
                     Arg::with_name("output")
                         .long("output")
                         .takes_value(true)
