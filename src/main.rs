@@ -32,16 +32,18 @@ fn main() {
             SubCommand::with_name("report")
                 .about("Dump analyzer result")
                 .arg(
-                    Arg::with_name("seccomp-profile")
+                    Arg::with_name("profile-output")
                         .long("seccomp-profile")
+                        .takes_value(true)
+                        .default_value("./seccomp.json")
                         .help("Generate seccomp profile by the result of trace"),
                 )
                 .arg(
-                    Arg::with_name("output")
-                        .long("output")
+                    Arg::with_name("raw-output")
+                        .long("raw")
                         .takes_value(true)
                         .default_value("./ftrace_syscalls_dump.log")
-                        .help("output file path"),
+                        .help("ouput raw log file"),
                 )
                 .arg(
                     Arg::with_name("container-id")

@@ -63,14 +63,20 @@ pub fn report(report_args: &ArgMatches) {
     );
     let container_trace_file = format!("{}/trace", &trace_path);
 
-    let output_file_path = report_args.value_of("output").unwrap().to_string();
-    let mut output_file = BufWriter::new(File::create(output_file_path).unwrap());
-    if report_args.is_present("seccomp-profile") {
+    if 0 < report_args.occurrences_of("profile-output") {
+        let output_file_path = report_args.value_of("profile-output").unwrap().to_string();
+        let mut output_file = BufWriter::new(File::create(output_file_path).unwrap());
         let profile = generate_profile(&container_trace_file);
         output_file
             .write_all(serde_json::to_string_pretty(&profile).unwrap().as_bytes())
             .unwrap();
-    } else {
+        output_file
+            .flush()
+            .unwrap_or_else(|_| panic!("cannot dump to {} ", &container_trace_file));
+    }
+    if 0 < report_args.occurrences_of("raw-output") {
+        let output_file_path = report_args.value_of("raw-output").unwrap().to_string();
+        let mut output_file = BufWriter::new(File::create(output_file_path).unwrap());
         let error_info = error_info!();
         for line in BufReader::new(File::open(&container_trace_file).unwrap()).lines() {
             let out = line.unwrap();
@@ -78,10 +84,10 @@ pub fn report(report_args: &ArgMatches) {
                 .write_all(convert_error_info(&out, &error_info).as_bytes())
                 .unwrap();
         }
+        output_file
+            .flush()
+            .unwrap_or_else(|_| panic!("cannot dump to {} ", &container_trace_file));
     }
-    output_file
-        .flush()
-        .unwrap_or_else(|_| panic!("cannot dump to {} ", &container_trace_file));
 
     if !report_args.is_present("container-id") {
         fs::remove_dir(&trace_path)
