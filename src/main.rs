@@ -36,6 +36,7 @@ fn main() {
                         .long("seccomp-profile")
                         .takes_value(true)
                         .default_value("./seccomp.json")
+                        .conflicts_with("container-id")
                         .help("Generate seccomp profile by the result of trace"),
                 )
                 .arg(
@@ -47,7 +48,7 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("container-id")
-                        .long("dump")
+                        .long("livedump")
                         .takes_value(true)
                         .help("Dump specified container ID's logs while running"),
                 ),
