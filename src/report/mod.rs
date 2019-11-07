@@ -13,18 +13,23 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 
 fn extract_syscall_name(line: &str) -> Option<String> {
     if let Some(begin) = line.rfind("sys_") {
-        if let Some(end) = line.rfind("(") {
+        if let Some(end) = line.rfind('(') {
             return Some(line[begin..end].trim_start_matches("sys_").to_string());
         }
     }
-    return None;
+    None
 }
 
 fn generate_profile(trace_file: &str) -> Seccomp {
     let mut syscalls: Vec<String> = Vec::new();
+    let mut invoked_from_container = false;
     for line in BufReader::new(File::open(&trace_file).unwrap()).lines() {
         if let Some(syscall) = extract_syscall_name(&line.unwrap()) {
-            syscalls.push(syscall);
+            if invoked_from_container {
+                syscalls.push(syscall);
+            } else if syscall == "execve" {
+                invoked_from_container = true;
+            }
         };
     }
     syscalls.sort();
