@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::path::Path;
 use std::process;
 
 #[test]
@@ -126,14 +127,13 @@ pub fn report(report_args: &ArgMatches) {
         process::exit(-1);
     }
     let mut cid;
+    let state_vals = utils::get_states_from_stdin();
+    cid = state_vals["id"].to_string();
+    if cid == "" {
+        panic!("cannot find container id");
+    }
     if report_args.is_present("container-id") {
         cid = report_args.value_of("container-id").unwrap().to_string();
-    } else {
-        let state_vals = utils::get_states_from_stdin();
-        cid = state_vals["id"].to_string();
-        if cid == "" {
-            panic!("cannot find container id");
-        }
     }
 
     let tracefs_path =
@@ -172,6 +172,23 @@ pub fn report(report_args: &ArgMatches) {
         .unwrap_or_else(|_| panic!("cannot dump to {} ", &container_trace_file));
 
     if !report_args.is_present("container-id") {
+        if report_args.is_present("enable-ulog") {
+            let ulog_dir_path = format!(
+                "{}/rootfs/ulog",
+                &state_vals["bundle"]
+                    .to_string()
+                    .trim_matches('\\')
+                    .trim_matches('"')
+            );
+            let ulog_path = format!("{}/trace_marker", &ulog_dir_path);
+            nix::mount::umount(Path::new(&ulog_path)).expect("bind mount is failed.");
+            fs::remove_dir_all(&ulog_dir_path).unwrap_or_else(|_| {
+                panic!(
+                    "cannot remove ftrace marker for container {}",
+                    &ulog_dir_path
+                )
+            });
+        }
         fs::remove_dir(&trace_path)
             .unwrap_or_else(|_| panic!("cannot remove ftrace instances dir {}", &trace_path));
     }

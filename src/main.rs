@@ -39,6 +39,11 @@ fn main() {
                         .takes_value(true)
                         .use_delimiter(true)
                         .help("If given, trace only specified the set of system calls"),
+                )
+                .arg(
+                    Arg::with_name("enable-ulog")
+                        .long("--enable-ulog")
+                        .help("If given, trace user space via /ulog/trace_marker"),
                 ),
         )
         .subcommand(
@@ -63,6 +68,11 @@ fn main() {
                         .long("livedump")
                         .takes_value(true)
                         .help("Dump specified container ID's logs while running"),
+                )
+                .arg(
+                    Arg::with_name("enable-ulog")
+                        .long("--enable-ulog")
+                        .help("If given, trace user space via /ulog/trace_marker"),
                 ),
         );
     let cmd_args = app.clone().get_matches();

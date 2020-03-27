@@ -1,6 +1,10 @@
+extern crate nix;
+
 use super::utils;
 use clap::ArgMatches;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::process;
 
 fn start_raw_syscall_logging(trace_setting_path: &str) {
@@ -56,7 +60,7 @@ fn disable_syscall_enter(trace_setting_path: &str) {
             .contains("sys_enter_")
         {
             fs::write(format!("{}/enable", &syscall_path), "0")
-                .expect(&format!("Failed to write to {}", &syscall_path));
+                .unwrap_or_else(|_| panic!("Failed to write to {}", &syscall_path));
         }
     }
 }
@@ -118,7 +122,40 @@ fn filter_by_error(trace_setting_path: &str) {
         }
         let syscalls_exit_filter = format!("{}/filter", syscall_path);
         fs::write(&syscalls_exit_filter, "ret < 0")
-            .expect(&format!("Failed to write to {}", &syscalls_exit_filter));
+            .unwrap_or_else(|_| panic!("Failed to write to {}", &syscalls_exit_filter));
+    }
+}
+
+fn bindmount_ulogger(trace_path: &str, ulog_dir_path: &str) {
+    if let Err(error) = fs::create_dir(ulog_dir_path.to_string()) {
+        panic!("{}: {}", ulog_dir_path, error)
+    };
+    let ulog_path = format!("{}/trace_marker", &ulog_dir_path);
+    fs::File::create(&ulog_path).unwrap();
+    let trace_marker_path = format!("{}/trace_marker", &trace_path);
+    if let Err(error) = nix::mount::mount(
+        Some(Path::new(&trace_marker_path)),
+        Path::new(&ulog_path),
+        None::<&str>,
+        nix::mount::MsFlags::MS_BIND,
+        None::<&str>,
+    ) {
+        fs::remove_dir_all(&ulog_dir_path).unwrap_or_else(|_| {
+            panic!(
+                "cannot remove ftrace marker for container {}",
+                &ulog_dir_path
+            )
+        });
+        panic!("{}", error)
+    }
+    if let Err(error) = fs::set_permissions(trace_marker_path, PermissionsExt::from_mode(0o666)) {
+        fs::remove_dir_all(&ulog_dir_path).unwrap_or_else(|_| {
+            panic!(
+                "cannot remove ftrace marker for container {}",
+                &ulog_dir_path
+            )
+        });
+        panic!("{}", error);
     }
 }
 
@@ -152,6 +189,18 @@ pub fn record(record_args: &ArgMatches) {
     if let Err(error) = fs::create_dir(trace_path.to_string()) {
         panic!("{}: {}", trace_path, error)
     };
+
+    // user space logging support
+    if record_args.is_present("enable-ulog") {
+        let ulog_dir_path = format!(
+            "{}/rootfs/ulog",
+            &state_vals["bundle"]
+                .to_string()
+                .trim_matches('\\')
+                .trim_matches('"')
+        );
+        bindmount_ulogger(&trace_path, &ulog_dir_path);
+    }
 
     let bufsize = record_args
         .value_of("buffer-size-kb")
