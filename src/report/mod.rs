@@ -1,7 +1,12 @@
 #[macro_use]
 mod err_converter;
+
 #[macro_use]
-mod syscalls;
+mod syscalls_x86_64;
+
+#[macro_use]
+mod syscalls_aarch64;
+
 mod oci_seccomp;
 
 use self::err_converter::Error;
@@ -16,7 +21,11 @@ use std::process;
 
 #[test]
 fn test_convert_syscall_id() {
-    let syscall_info = syscall_info!();
+    #[cfg(target_arch = "aarch64")]
+    let syscall_info = syscall_aarch64_info!();
+
+    #[cfg(target_arch = "x86_64")]
+    let syscall_info = syscall_x86_64_info!();
     assert_eq!(
         convert_syscall_id(&format!("aaaaaa:NR {} ", libc::SYS_accept), &syscall_info),
         Some("accept".to_string())
@@ -67,7 +76,13 @@ fn test_generate_profile() {
 fn generate_profile(trace_file: &str) -> Seccomp {
     let mut syscalls: Vec<String> = Vec::new();
     let mut invoked_from_container = false;
-    let syscall_info = syscall_info!();
+
+    #[cfg(target_arch = "aarch64")]
+    let syscall_info = syscall_aarch64_info!();
+
+    #[cfg(target_arch = "x86_64")]
+    let syscall_info = syscall_x86_64_info!();
+
     for line in BufReader::new(File::open(&trace_file).unwrap()).lines() {
         if let Some(syscall) = convert_syscall_id(&line.unwrap(), &syscall_info) {
             if syscall == "execve" {
@@ -125,7 +140,7 @@ pub fn report(report_args: &ArgMatches) {
         println!("The argument '--livedump' cannot be used with '--seccomp-profile");
         process::exit(-1);
     }
-    let mut cid;
+    let cid;
     if report_args.is_present("container-id") {
         cid = report_args.value_of("container-id").unwrap().to_string();
     } else {

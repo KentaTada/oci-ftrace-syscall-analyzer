@@ -1,5 +1,5 @@
 #[macro_export]
-macro_rules! syscall_info {
+macro_rules! syscall_x86_64_info {
     () => {{
         {
             let mut tmp = HashMap::new();
